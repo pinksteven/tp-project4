@@ -33,18 +33,18 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
    wndClass.hCursor        = LoadCursor(NULL, IDC_ARROW);
    wndClass.hbrBackground  = (HBRUSH)GetStockObject(WHITE_BRUSH);
    wndClass.lpszMenuName   = NULL;
-   wndClass.lpszClassName  = TEXT("GettingStarted");
+   wndClass.lpszClassName  = TEXT("tp4");
    
    RegisterClass(&wndClass);
    
    hWnd = CreateWindow(
-      TEXT("GettingStarted"),   // window class name
-      TEXT("Getting Started"),  // window caption
+      TEXT("tp4"),   // window class name
+      TEXT("tp4"),  // window caption
       WS_OVERLAPPEDWINDOW,      // window style
       CW_USEDEFAULT,            // initial x position
       CW_USEDEFAULT,            // initial y position
-      CW_USEDEFAULT,            // initial x size
-      CW_USEDEFAULT,            // initial y size
+      600,                      // initial x size
+      480,                      // initial y size
       NULL,                     // parent window handle
       NULL,                     // window menu handle
       hInstance,                // program instance handle

@@ -1,10 +1,12 @@
 #include <windows.h>
+#include <windowsx.h>
 #include <objidl.h>
 #include <gdiplus.h>
 using namespace Gdiplus;
 #pragma comment (lib,"Gdiplus.lib")
 
 #include "elevator.h"
+#include "button.h"
 
 Building building(NULL, 1);
 
@@ -51,7 +53,8 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
       NULL,                     // window menu handle
       hInstance,                // program instance handle
       NULL);                    // creation parameters
-      building = Building(hWnd, 5); // Create a building with 5 floors
+
+   building = Building(hWnd, 5); // Create a building with 5 floors
       
    ShowWindow(hWnd, iCmdShow);
    UpdateWindow(hWnd);
@@ -82,6 +85,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
    case WM_DESTROY:
       PostQuitMessage(0);
       return 0;
+   case WM_MOUSEMOVE:
+   case WM_LBUTTONDOWN:
+   case WM_LBUTTONUP: {
+      int x = GET_X_LPARAM(lParam);
+      int y = GET_Y_LPARAM(lParam);
+      for (auto& floor : building.getFloors()) {
+         for (auto& btn : floor.getButtons()) {
+            // Handle mouse events for each button
+            btn.handleMouse(message, x, y);
+         }
+      }
+      InvalidateRect(hWnd, NULL, FALSE); // Redraw if needed
+    break;
+}
    default:
       return DefWindowProc(hWnd, message, wParam, lParam);
    }

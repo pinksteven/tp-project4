@@ -1,13 +1,18 @@
 #include <vector>
 #include <queue>
+#include <thread>
+#include <cmath>
+#include <windows.h>
 #include <objidl.h>
 #include <gdiplus.h>
 using namespace Gdiplus;
 #pragma comment (lib,"Gdiplus.lib")
 
+class Floor; // Forward declaration
+
 class Person {
 public:
-    Person(HWND hwnd, int destination, int x, int y, int width, int height)
+    Person(HWND hwnd, Floor *destination, int x, int y, int width, int height)
         : hwnd(hwnd),  destination(destination), x(x), y(y), width(width), height(height) {}
 
     int x;
@@ -16,11 +21,30 @@ public:
     int width;
 
     int getId() const { return id; }
-    int getDestination() const { return destination; }
+    Floor* getDestination() { return destination; }
+
     void move(int x_offset, int y_offset) {
         x+= x_offset; // Move the person in x direction
         y+=y_offset; // Move the person in y direction
         RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW); // Update the entire window
+    }
+    void animate(int x_offset, int y_offset, double duration) {
+        // Move the elevator up or down by the specified offset over the specified duration
+        std::thread t([this, &x_offset, &y_offset, duration]() {
+            int max_offset = (std::abs(x_offset) > std::abs(y_offset)) ? abs(x_offset) : abs(y_offset); // Calculate the total offset
+            double stepDuration = duration / max_offset; // Duration of each step, we have offset amount of steps
+            int x_direction = (x_offset > 0) ? 1 : -1; // Determine the direction of movement in x axis
+            int y_direction = (y_offset > 0) ? 1 : -1; // Determine the direction of movement in y axis
+            for (int i = 0; i < max_offset; ++i) {
+                if(x_offset != 0 && y_offset != 0) {
+                    move(x_direction, y_direction); // Move in x and y directions
+                    x_offset -= x_direction; // Decrease the offset in x direction
+                    y_offset -= y_direction; // Decrease the offset in y direction
+                }
+                Sleep(stepDuration); // Wait for the duration of each step
+            }
+        });
+        t.detach(); // Detach the thread to allow it to run independently
     }
 
 /*     void erase() {
@@ -43,7 +67,7 @@ public:
     } */
 private:
     int id;
-    int destination;
+    Floor *destination;
     HWND hwnd; // Handle to the window for drawing
 };
 
@@ -93,14 +117,14 @@ public:
         : hwnd(hwnd) {}
 
     std::vector<Person> getPassengers() const { return passengers; }
-    int getCurrentFloor() const { return currentFloor; }
+    Floor *getCurrentFloor() const { return currentFloor; }
 
     int x;
     int y;
     int width;
     int height;
 
-    void setValues(int currentFloor, int x, int y, int width, int height) {
+    void setValues(Floor *currentFloor, int x, int y, int width, int height) {
         this->currentFloor = currentFloor;
         this->x = x;
         this->y = y;
@@ -108,9 +132,31 @@ public:
         this->height = height;
     }
 
-    void moveToFloor(int floor) {
-        if (floor >= 0) {
-            currentFloor = floor;
+    void move(int offset) {
+        y+=offset; // Move the elevator up
+        for(auto& passenger : passengers) 
+            passenger.move(0, offset); // Move each passenger in the elevator
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW); // Update the entire window
+    }
+
+    void animate(int offset, double duration) {
+        // Move the elevator up or down by the specified offset over the specified duration
+        std::thread t([this, offset, duration]() {
+            double stepDuration = duration / offset; // Duration of each step, we have offset amount of steps
+            int direction = (offset > 0) ? 1 : -1; // Determine the direction of movement
+            for (int i = 0; i < std::abs(offset); ++i) {
+                move(direction);
+                Sleep(stepDuration); // Wait for the duration of each step
+            }
+        });
+        t.detach(); // Detach the thread to allow it to run independently
+    }
+
+    void moveToFloor(Floor *destination) {
+        if (currentFloor->getFloorNumber() != destination->getFloorNumber()) {
+            int offset = destination->y - currentFloor->y; // Calculate the offset to move to the destination floor
+            animate(offset, std::abs(offset)); // Animate the movement with a duration proportional to the distance
+            currentFloor = destination; // Update the current floor after moving
         }
     }
     void grabPassengers(std::queue<Person>& floor) {
@@ -120,13 +166,6 @@ public:
             passengers.push_back(floor.front());
             floor.pop();
         };
-    }
-
-    void move(int offset) {
-        y+=offset; // Move the elevator up
-        for(auto& passenger : passengers) 
-            passenger.move(0, offset); // Move each passenger in the elevator
-        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW); // Update the entire window
     }
 
 /*     void draw() {
@@ -146,7 +185,7 @@ public:
         move(-1);
     } */
 private:
-    int currentFloor;
+    Floor *currentFloor;
     std::vector<Person> passengers;
     HWND hwnd; // Handle to the window for drawing
 };
@@ -161,7 +200,6 @@ public:
             int height = rect.bottom - rect.top;
             //height of window - 1px per floor and 3px space form bottom for clarity
             int floorHeight = (height-numFloors-3) / numFloors;
-            elevator.setValues(0, (width - floorHeight*2)/2+1, height - floorHeight - 2, floorHeight*2-3, floorHeight-2); // Initialize elevator in the middle and last floor
             for (int i = 0; i < numFloors; ++i) {
                 int floorY = height - i * floorHeight - 3; // Calculate the y position of the floor
                 if (i % 2 == 0) {
@@ -172,6 +210,7 @@ public:
                     floors.emplace_back(hwnd, i, (width+floorHeight*2)/2, floorY, (width-floorHeight*2)/2); // Queue occupies the right side of the floor
                 }
             }
+            elevator.setValues(&floors[0], (width - floorHeight*2)/2+1, height - floorHeight - 2, floorHeight*2-3, floorHeight-2);// Initialize elevator in the middle and last floor
         }
     }
 

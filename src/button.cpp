@@ -1,6 +1,7 @@
 #include "button.h"
-
 #include "elevator.h"
+#include "floor.h"
+#include "person.h"
 
 void Button::draw(Graphics& graphics) const {
     Color bgColor = pressed ? Color(255, 180, 180, 180) : (hovered ? Color(255, 220, 220, 220) : Color(255, 200, 200, 200));
@@ -26,7 +27,7 @@ void Button::handleMouse(UINT msg, int mx, int my) {
     } else if (msg == WM_LBUTTONDOWN) {
         pressed = inside;
     } else if (msg == WM_LBUTTONUP) {
-        if (pressed && inside) floor->spawnPerson(destination); // Call the onClick function if pressed and inside
+        if (pressed && inside) {floor->spawnPerson(destination); elevator->queueFloor(destination);}; // Call the onClick function if pressed and inside
         pressed = false;
     }
 }

@@ -6,13 +6,14 @@ using namespace Gdiplus;
 #pragma comment (lib,"Gdiplus.lib")
 
 #include "elevator.h"
+#include "floor.h"
 #include "button.h"
 
-Building building(NULL, 1);
+Elevator elevator(NULL, 1);
 
 VOID OnPaint(HWND hWnd)
 {
-   building.draw(); // Draw the building, elevator, and floors
+   elevator.draw(); // Draw the building, elevator, and floors
 }
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
@@ -54,7 +55,7 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
       hInstance,                // program instance handle
       NULL);                    // creation parameters
 
-   building = Building(hWnd, 5); // Create a building with 5 floors
+   elevator = Elevator(hWnd, 5); // Create a building with 5 floors
       
    ShowWindow(hWnd, iCmdShow);
    UpdateWindow(hWnd);
@@ -90,9 +91,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
    case WM_LBUTTONUP: {
       int x = GET_X_LPARAM(lParam);
       int y = GET_Y_LPARAM(lParam);
-      for (auto& floor : building.getFloors()) {
+      for (auto& floor : elevator.getFloors()) {
          for (auto& btn : floor.getButtons()) {
-            // Handle mouse events for each button
+            // Ensure handleMouse exists in Button class
             btn.handleMouse(message, x, y);
          }
       }

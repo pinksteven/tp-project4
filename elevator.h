@@ -45,25 +45,10 @@ public:
         });
         t.detach(); // Detach the thread to allow it to run independently
     }
-
-/*     void erase() {
-        // Create a rectangle size of apx high line
-        RECT updateRect;
-        updateRect.left = x;
-        updateRect.top = y;
-        updateRect.right = x + width;
-        updateRect.bottom = y + height;
-        RedrawWindow(hwnd, &updateRect, NULL, RDW_INVALIDATE | RDW_UPDATENOW);//update the person part of the window
-    } */
-/*     void draw() {
-        HDC          hdc;
-        PAINTSTRUCT  ps;
-        hdc = BeginPaint(hwnd, &ps);
-        Graphics graphics(hdc);
+    void draw(Graphics& graphics) const {
         SolidBrush brush(Color(255, 0, 0, 255)); // Blue color for the person
         graphics.FillRectangle(&brush, x, y, width, height);
-        EndPaint(hwnd, &ps);
-    } */
+    }
 private:
     Floor *destination;
     HWND hwnd; // Handle to the window for drawing
@@ -74,7 +59,7 @@ public:
     Floor(HWND hwnd, int floorNumber, int x, int y, int length) : hwnd(hwnd), floorNumber(floorNumber), x(x), y(y), length(length) {}
 
     int getFloorNumber() const { return floorNumber; }
-    std::queue<Person>& getQueue() { return queue; }
+    std::deque<Person>& getQueue() { return queue; }
     std::vector<Person>& getLeaving() { return leaving; }
 
     int x;
@@ -82,29 +67,22 @@ public:
     int length;
 
     void addPerson(const Person& person) {
-        queue.push(person);
+        queue.push_back(person);
     }
 
-/*     void draw() {
-        // Create a rectangle size of apx high line
-        RECT updateRect;
-        updateRect.left = x;
-        updateRect.top = y;
-        updateRect.right = x + length;
-        updateRect.bottom = y + 1;
-
-        // RedrawWindow(hwnd, &updateRect, NULL, RDW_INVALIDATE);//update the floor part of the window
-        HDC          hdc;
-        PAINTSTRUCT  ps;
-        hdc = BeginPaint(hwnd, &ps);
-        Graphics graphics(hdc);
-        Pen redPen(Color(255, 0, 0, 0)); // Black color for the floor line
-        graphics.DrawLine(&redPen, x, y, x+length, y);
-        EndPaint(hwnd, &ps);
-    } */
+    void draw(Graphics& graphics) const {
+        Pen pen(Color(255, 0, 0, 0)); // Black color for the floor line
+        graphics.DrawLine(&pen, x, y, x+length, y);
+        for (const auto& person : queue) {
+            person.draw(graphics); // Draw each person in the queue
+        }
+        for (const auto& person : leaving) {
+            person.draw(graphics); // Draw each person leaving the floor
+        }
+    }
 private:
     int floorNumber;
-    std::queue<Person> queue; // Queue of people waiting on this floor
+    std::deque<Person> queue; // Queue of people waiting on this floor
     std::vector<Person> leaving; // People leaving the floor
     HWND hwnd; // Handle to the window for drawing
 };
@@ -169,29 +147,20 @@ public:
     }
     void grabPassengers(std::queue<Person>& floor) {
         double totalWeight = 0.0;
-        // can't grab from empty floor, 1 passenger is 70kg, max weight is 600kg so if weight of all pasengers on bard is <= 530kg, we can grab more passengers
+        // if 1 more passenger will still fit in limit then grab
         while(!floor.empty() && (passengers.size() + 1) * 70 <= 600){
             passengers.push_back(floor.front());
             floor.pop();
         };
     }
 
-/*     void draw() {
-        // Create a rectangle spanning the entire elevator shaft
-        RECT updateRect;
-        GetClientRect(hwnd, &updateRect);//grab whole window rect
-        updateRect.left = x;//change to start at elevator x position
-        updateRect.right = x + width+1;//change to end when elevator ends add 1px bc of the border line
-        // RedrawWindow(hwnd, &updateRect, NULL, RDW_INVALIDATE);//update the elevetaor shat portion of the window
-        HDC          hdc;
-        PAINTSTRUCT  ps;
-        hdc = BeginPaint(hwnd, &ps);
-        Graphics graphics(hdc);
-        Pen redPen(Color(255, 255, 0, 0)); // Red color for the elevator
-        graphics.DrawRectangle(&redPen, Rect(x, y, width, height));
-        EndPaint(hwnd, &ps);
-        move(-1);
-    } */
+    void draw(Graphics& graphics) const {
+        Pen pen(Color(255, 255, 0, 0)); // Red color for the elevator
+        graphics.DrawRectangle(&pen, Rect(x, y, width, height));
+        for (const auto& passenger : passengers) {
+            passenger.draw(graphics); // Draw each passenger in the elevator
+        }
+    }
 private:
     Floor *currentFloor;
     std::vector<Person> passengers;
@@ -233,22 +202,9 @@ public:
         Pen redPen(Color(255, 255, 0, 0)); // Red color for the elevator
         Pen blackPen(Color(255, 0, 0, 0)); // Black color for the floor line
         SolidBrush brush(Color(255, 0, 0, 255)); // Blue color for the person
-        graphics.DrawRectangle(&redPen, Rect(elevator.x, elevator.y, elevator.width, elevator.height));
-        for (const auto& passenger : elevator.getPassengers()) {
-            graphics.FillRectangle(&brush, passenger.x, passenger.y, passenger.width, passenger.height); // Draw each person as a small rectangle
-        }
-        for (auto& floor : floors) {
-            graphics.DrawLine(&blackPen, floor.x, floor.y, floor.x+floor.length, floor.y);
-            std::queue<Person> drawQueue = floor.getQueue();
-            while(!drawQueue.empty()) {
-                Person person = drawQueue.front();
-                graphics.FillRectangle(&brush, person.x, person.y, person.width, person.height); // Draw each person as a small rectangle
-                drawQueue.pop();
-            }
-            for(const auto& person : floor.getLeaving()) {
-                graphics.FillRectangle(&brush, person.x, person.y, person.width, person.height); // Draw each person as a small rectangle
-            }
-        }
+        elevator.draw(graphics); // Draw the elevator and passengers within it
+        for (auto& floor : floors) 
+            floor.draw(graphics); // Draw each floor and people on it
         EndPaint(hwnd, &ps);
     }
 

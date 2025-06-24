@@ -6,7 +6,7 @@
 #include <objidl.h>
 #include <gdiplus.h>
 using namespace Gdiplus;
-#pragma comment (lib,"Gdiplus.lib")
+//#pragma comment (lib,"Gdiplus.lib")
 
 class Floor; // Forward declaration
 
@@ -20,7 +20,6 @@ public:
     int height;
     int width;
 
-    int getId() const { return id; }
     Floor* getDestination() { return destination; }
 
     void move(int x_offset, int y_offset) {
@@ -28,13 +27,13 @@ public:
         y+=y_offset; // Move the person in y direction
         RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW); // Update the entire window
     }
-    void animate(int x_offset, int y_offset, double duration) {
+    void animate(int x_offset, int y_offset, int duration) {
         // Move the elevator up or down by the specified offset over the specified duration
-        std::thread t([this, &x_offset, &y_offset, duration]() {
+        std::thread t([this, x_offset, y_offset, duration]() mutable {
             int max_offset = (std::abs(x_offset) > std::abs(y_offset)) ? abs(x_offset) : abs(y_offset); // Calculate the total offset
-            double stepDuration = duration / max_offset; // Duration of each step, we have offset amount of steps
-            int x_direction = (x_offset > 0) ? 1 : -1; // Determine the direction of movement in x axis
-            int y_direction = (y_offset > 0) ? 1 : -1; // Determine the direction of movement in y axis
+            int stepDuration = duration / max_offset; // Duration of each step, we have offset amount of steps
+            int x_direction = (x_offset > 0) ? 1 : (x_offset < 0) ? -1 : 0; // Determine the direction of movement in x axis
+            int y_direction = (y_offset > 0) ? 1 : (y_offset < 0) ? -1 : 0; // Determine the direction of movement in y axis
             for (int i = 0; i < max_offset; ++i) {
                 if(x_offset != 0 && y_offset != 0) {
                     move(x_direction, y_direction); // Move in x and y directions
@@ -66,7 +65,6 @@ public:
         EndPaint(hwnd, &ps);
     } */
 private:
-    int id;
     Floor *destination;
     HWND hwnd; // Handle to the window for drawing
 };
@@ -116,8 +114,8 @@ public:
     Elevator(HWND hwnd)
         : hwnd(hwnd) {}
 
-    std::vector<Person> getPassengers() const { return passengers; }
-    Floor *getCurrentFloor() const { return currentFloor; }
+    const std::vector<Person>& getPassengers() const { return passengers; }
+    const Floor *getCurrentFloor() const { return currentFloor; }
 
     int x;
     int y;
@@ -139,10 +137,11 @@ public:
         RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW); // Update the entire window
     }
 
-    void animate(int offset, double duration) {
+    //Made redundant by the moveToFloor function, but left here for reference
+/*     void animate(int offset, double duration) {
         // Move the elevator up or down by the specified offset over the specified duration
         std::thread t([this, offset, duration]() {
-            double stepDuration = duration / offset; // Duration of each step, we have offset amount of steps
+            double stepDuration = duration / std::abs(offset); // Duration of each step, we have offset amount of steps
             int direction = (offset > 0) ? 1 : -1; // Determine the direction of movement
             for (int i = 0; i < std::abs(offset); ++i) {
                 move(direction);
@@ -150,19 +149,28 @@ public:
             }
         });
         t.detach(); // Detach the thread to allow it to run independently
-    }
+    } */
 
-    void moveToFloor(Floor *destination) {
+    void moveToFloor(Floor *destination, int duration) {
         if (currentFloor->getFloorNumber() != destination->getFloorNumber()) {
             int offset = destination->y - currentFloor->y; // Calculate the offset to move to the destination floor
-            animate(offset, std::abs(offset)); // Animate the movement with a duration proportional to the distance
-            currentFloor = destination; // Update the current floor after moving
+            // Move the elevator up or down by the specified offset over the specified duration
+            std::thread t([this, destination, offset, duration]() {
+                int stepDuration = duration / std::abs(offset); // Duration proportional to the distance
+                int direction = (offset > 0) ? 1 : -1; // Determine the direction of movement
+                for (int i = 0; i < std::abs(offset); ++i) {
+                    move(direction);
+                    Sleep(stepDuration); // Wait for the duration of each step (1 ms per step)
+                }
+                    currentFloor = destination; // Update the current floor after moving
+            });
+            t.detach(); // Detach the thread to allow it to run independently
         }
     }
     void grabPassengers(std::queue<Person>& floor) {
         double totalWeight = 0.0;
         // can't grab from empty floor, 1 passenger is 70kg, max weight is 600kg so if weight of all pasengers on bard is <= 530kg, we can grab more passengers
-        while(!floor.empty() && passengers.size() * 70 <= 530){
+        while(!floor.empty() && (passengers.size() + 1) * 70 <= 600){
             passengers.push_back(floor.front());
             floor.pop();
         };
@@ -216,7 +224,7 @@ public:
 
     // One big draw function bc i don't understand how to do this in separate functions (it was very wierd when it was here)
     void draw() {
-        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE);
+        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE); //It doesn't work without it, it seems like it should, but it doesn't
         // Draw the elevator and all floors
         HDC          hdc;
         PAINTSTRUCT  ps;
@@ -232,10 +240,10 @@ public:
         for (auto& floor : floors) {
             graphics.DrawLine(&blackPen, floor.x, floor.y, floor.x+floor.length, floor.y);
             std::queue<Person> drawQueue = floor.getQueue();
-            for(int i=0; i<drawQueue.size(); i++) {
+            while(!drawQueue.empty()) {
                 Person person = drawQueue.front();
-                drawQueue.pop();
                 graphics.FillRectangle(&brush, person.x, person.y, person.width, person.height); // Draw each person as a small rectangle
+                drawQueue.pop();
             }
             for(const auto& person : floor.getLeaving()) {
                 graphics.FillRectangle(&brush, person.x, person.y, person.width, person.height); // Draw each person as a small rectangle

@@ -15,11 +15,6 @@ public:
     Person(HWND hwnd, Floor *destination, int x, int y, int width, int height)
         : hwnd(hwnd),  destination(destination), x(x), y(y), width(width), height(height) {}
 
-    int x;
-    int y;
-    int height;
-    int width;
-
     Floor* getDestination() { return destination; }
 
     void move(int x_offset, int y_offset) {
@@ -50,6 +45,7 @@ public:
         graphics.FillRectangle(&brush, x, y, width, height);
     }
 private:
+    int x, y, width, height;
     Floor *destination;
     HWND hwnd; // Handle to the window for drawing
 };
@@ -61,10 +57,8 @@ public:
     int getFloorNumber() const { return floorNumber; }
     std::deque<Person>& getQueue() { return queue; }
     std::vector<Person>& getLeaving() { return leaving; }
-
-    int x;
-    int y;
-    int length;
+    int getX() const { return x; }
+    int getY() const { return y; }
 
     void addPerson(const Person& person) {
         queue.push_back(person);
@@ -81,6 +75,7 @@ public:
         }
     }
 private:
+    int x, y, length; // Position and size of the floor
     int floorNumber;
     std::deque<Person> queue; // Queue of people waiting on this floor
     std::vector<Person> leaving; // People leaving the floor
@@ -94,11 +89,6 @@ public:
 
     const std::vector<Person>& getPassengers() const { return passengers; }
     const Floor *getCurrentFloor() const { return currentFloor; }
-
-    int x;
-    int y;
-    int width;
-    int height;
 
     void setValues(Floor *currentFloor, int x, int y, int width, int height) {
         this->currentFloor = currentFloor;
@@ -131,7 +121,7 @@ public:
 
     void moveToFloor(Floor *destination, int duration) {
         if (currentFloor->getFloorNumber() != destination->getFloorNumber()) {
-            int offset = destination->y - currentFloor->y; // Calculate the offset to move to the destination floor
+            int offset = destination->getY() - currentFloor->getY(); // Calculate the offset to move to the destination floor
             // Move the elevator up or down by the specified offset over the specified duration
             std::thread t([this, destination, offset, duration]() {
                 int stepDuration = duration / std::abs(offset); // Duration proportional to the distance
@@ -162,6 +152,7 @@ public:
         }
     }
 private:
+    int x, y, height, width; // Position and size of the elevator
     Floor *currentFloor;
     std::vector<Person> passengers;
     HWND hwnd; // Handle to the window for drawing

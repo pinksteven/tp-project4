@@ -7,8 +7,13 @@ using namespace Gdiplus;
 
 class Person {
 public:
-    Person(HWND hwnd, int destination)
-        : hwnd(hwnd),  destination(destination), x(x), y(y){}
+    Person(HWND hwnd, int destination, int x, int y, int width, int height)
+        : hwnd(hwnd),  destination(destination), x(x), y(y), width(width), height(height) {}
+
+    int x;
+    int y;
+    int height;
+    int width;
 
     int getId() const { return id; }
     int getDestination() const { return destination; }
@@ -18,7 +23,7 @@ public:
         RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW); // Update the entire window
     }
 
-    void erase() {
+/*     void erase() {
         // Create a rectangle size of apx high line
         RECT updateRect;
         updateRect.left = x;
@@ -26,7 +31,7 @@ public:
         updateRect.right = x + width;
         updateRect.bottom = y + height;
         RedrawWindow(hwnd, &updateRect, NULL, RDW_INVALIDATE | RDW_UPDATENOW);//update the person part of the window
-    }
+    } */
 /*     void draw() {
         HDC          hdc;
         PAINTSTRUCT  ps;
@@ -39,10 +44,6 @@ public:
 private:
     int id;
     int destination;
-    int x;
-    int y;
-    int height;
-    int width;
     HWND hwnd; // Handle to the window for drawing
 };
 
@@ -52,6 +53,7 @@ public:
 
     int getFloorNumber() const { return floorNumber; }
     std::queue<Person>& getQueue() { return queue; }
+    std::vector<Person>& getLeaving() { return leaving; }
 
     int x;
     int y;
@@ -183,9 +185,22 @@ public:
         Graphics graphics(hdc);
         Pen redPen(Color(255, 255, 0, 0)); // Red color for the elevator
         Pen blackPen(Color(255, 0, 0, 0)); // Black color for the floor line
+        SolidBrush brush(Color(255, 0, 0, 255)); // Blue color for the person
         graphics.DrawRectangle(&redPen, Rect(elevator.x, elevator.y, elevator.width, elevator.height));
+        for (const auto& passenger : elevator.getPassengers()) {
+            graphics.FillRectangle(&brush, passenger.x, passenger.y, passenger.width, passenger.height); // Draw each person as a small rectangle
+        }
         for (auto& floor : floors) {
             graphics.DrawLine(&blackPen, floor.x, floor.y, floor.x+floor.length, floor.y);
+            std::queue<Person> drawQueue = floor.getQueue();
+            for(int i=0; i<drawQueue.size(); i++) {
+                Person person = drawQueue.front();
+                drawQueue.pop();
+                graphics.FillRectangle(&brush, person.x, person.y, person.width, person.height); // Draw each person as a small rectangle
+            }
+            for(const auto& person : floor.getLeaving()) {
+                graphics.FillRectangle(&brush, person.x, person.y, person.width, person.height); // Draw each person as a small rectangle
+            }
         }
         EndPaint(hwnd, &ps);
     }

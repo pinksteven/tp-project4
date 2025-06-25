@@ -13,6 +13,8 @@
 #define ELEVATOR_GRAB (WM_USER + 3)
 #define ELEVATOR_WAIT (WM_USER + 4)
 
+#define PERSON_ANIMATE (WM_USER + 6)
+
 Elevator::Elevator(HWND hwnd, int numFloors)
         : hwnd(hwnd), destinationFloor(nullptr), goingUp(true) {
         RECT rect;
@@ -47,6 +49,14 @@ Elevator::Elevator(HWND hwnd, int numFloors)
     }
 }
 
+Elevator::~Elevator() { 
+    killThread();
+    for(auto& p : passengers) p.killThread();
+    for (auto& f : floors) {
+        for(auto& q : f.getQueue()) q.killThread();
+        for(auto& l : f.getLeaving()) l.killThread();
+    }
+}
 
 void Elevator::move(int offset) {
         y+=offset; // Move the elevator up
@@ -73,7 +83,7 @@ void Elevator::moveToFloor(const Floor *destination, int duration) {
                 Sleep(stepDuration); // Wait for the duration of each step
             }
                 currentFloor = const_cast<Floor*>(destination); // Update the current floor after moving
-                //PostMessage(hwnd, ELEVATOR_DROP, 0, 0); // Drop passengers at the current floor completing the movement loop
+                PostMessage(hwnd, ELEVATOR_DROP, 0, 0); // Drop passengers at the current floor completing the movement loop
         });
     }
 }
@@ -82,36 +92,44 @@ void Elevator::grabPassengers() {
     killThread();
     thread = std::thread([this]() {
         auto& queue = currentFloor->getQueue();
-        /* for (auto it = queue.begin(); it != queue.end(); ) {
-            if ((*it).isGoingUp()==goingUp && destinationFloor != nullptr && (passengers.size()+1)*70 <= 600) {
-                floorQueue.erase(std::find(floorQueue.begin(), floorQueue.end(), currentFloor)); // Remove the current floor from the queue
-                Person enteringPerson = *it; // Create a copy of the person entering the elevator
+        for (auto it = queue.begin(); it != queue.end(); ) {
+            if (destinationFloor != nullptr && (passengers.size() + 1)*70 <= 600 && it->isGoingUp()==goingUp) {
+                int index = std::distance(queue.begin(), it);
+                auto remove = std::find(floorQueue.begin(), floorQueue.end(), currentFloor);
+                if(remove != floorQueue.end()) floorQueue.erase(remove); // Remove the current floor from the queue
+                if((goingUp && it->getDestination()->getFloorNumber()<destinationFloor->getFloorNumber()) || 
+                    (!goingUp && it->getDestination()->getFloorNumber()>destinationFloor->getFloorNumber())) {
+                        auto remove = std::find(floorQueue.begin(), floorQueue.end(), it->getDestination());
+                        if(remove != floorQueue.end()) floorQueue.erase(remove); //We're going to pass by it so we can remove
+                    }
                 int movement;
                 if (currentFloor->getFloorNumber()%2==0){
-                    passengers.push_front(enteringPerson); // Add the waiting to passenger vector
-                    movement = enteringPerson.getWidth(); // Calculate the movement direction
-                    for(auto& p : passengers) {
-                        p.animate(movement, 0, 100); // Move each passenger in the elevator
+                    movement = it->getWidth(); // Calculate the movement direction
+                    if(!passengers.empty()){
+                        for(auto& p : passengers) {
+                            p.animateX(movement, 100); // Move each passenger in the elevator
+                        }
                     }
-                    int newMove = x - enteringPerson.getX();
-                    passengers.front().animate(newMove, 0, 100); // Animate the waiting passenger
+                    passengers.push_front(std::move(*it)); // Add the waiting to passenger vector
+                    it = queue.erase(it); // Remove the passenger from the queue
+                    int newMove = x - passengers.front().getX()+3;
+                    int time = std::abs(newMove)/passengers.front().getWidth();
+                    passengers.front().animateX(newMove, time*100); // Animate the waiting passenger
                 } else {
-                    passengers.push_back(enteringPerson); // Add the waiting to passenger vector
-                    movement = -enteringPerson.getWidth(); // Calculate the movement direction
-                    for(auto& p : passengers) {
-                        p.animate(movement, 0, 100); // Move each passenger in the elevator
-                    }
-                    int newMove = x + width - enteringPerson.getX();
-                    passengers.back().animate(newMove, 0, 100); // Animate the waiting passenger
-                    
+                    movement = (-1) * it->getWidth(); // Calculate the movement direction
+                    passengers.push_front(std::move(*it)); // Add the waiting to passenger vector
+                    it = queue.erase(it); // Remove the passenger from the queue
+                    int newMove = x + (passengers.size()-1)*passengers.front().getWidth() - passengers.front().getX()+3;
+                    int time = std::abs(newMove)/passengers.front().getWidth();
+                    passengers.front().animateX(newMove, time*100); // Animate the waiting passenger
                 }
-                for(auto j = std::next(it); it != queue.end(); ++j) {
-                    j->animate(movement, 0, 100); // Move each passenger in the elevator
+
+                for(auto j = index; j < queue.size(); ++j) {
+                    queue[j].animateX(movement, 100); // Move each passenger in the elevator
                 }
-                it = queue.erase(it); // Remove the passenger from the queue
                 Sleep(100); // Wait for a short duration to have spacing between leaving passengers
-            }
-        } */
+            } else { ++it; }
+        }
         if(destinationFloor != nullptr){
             int current = currentFloor->getFloorNumber();
             Floor* nextFloor = (goingUp) ? &floors[current+1] : &floors[current-1];
@@ -129,26 +147,36 @@ void Elevator::dropPassengers(){
     killThread();
     // Drop passengers at the current floor
     thread = std::thread ([this]() {
-        /* for (auto it = passengers.begin(); it != passengers.end(); ) {
-            if (*it->getDestination() == *currentFloor) {
-                Person leavingPerson = *it;
-                currentFloor->getLeaving().push_back(leavingPerson); // Add the passenger to the leaving list of the current floor
-                //currentFloor->getLeaving().back().leave(); // Animate the passenger leaving the floor
-                int movement = (currentFloor->getFloorNumber() % 2 == 0) ? -leavingPerson.getWidth() : leavingPerson.getWidth(); // Calculate the movement direction
-                for(auto j = std::next(it); j!=passengers.end(); ++j) {
-                    j->animate(movement, 0, 100); // Move each passenger in the elevator
+        if(!passengers.empty()){
+            for (auto it = passengers.begin(); it != passengers.end(); ) {
+                if (*it->getDestination() == *currentFloor) {
+                    std::vector<Person>* leaving = &currentFloor->getLeaving();
+                    int index = std::distance(passengers.begin(), it);
+                    leaving->push_back(std::move(*it)); // Add the passenger to the leaving list of the current floor
+                    it = passengers.erase(it); // Remove the passenger from the elevator
+                    leaving->back().leave(); // Animate the passenger leaving the floor
+                    Sleep(600); //Hopefully he left by now
+                    int pos = x;//position to move passenger to
+                    for(auto& p : passengers) {
+                        p.animateX(pos - p.getX(), 100); // Move each passenger in the elevator
+                        Sleep(100);
+                        pos += p.getWidth();
+                    }
+                    Sleep(100); // Wait for a short duration to have spacing between leaving passengers
+                } else {
+                    ++it; // Move to the next passenger if not leaving
                 }
-                it = passengers.erase(it); // Remove the passenger from the elevator
-                Sleep(100); // Wait for a short duration to have spacing between leaving passengers
-            } else {
-                ++it; // Move to the next passenger if not leaving
             }
-        } */
-        if(*currentFloor == *destinationFloor || destinationFloor == nullptr) {
-            Floor* newDest = (!floorQueue.empty()) ? floorQueue.front() : nullptr;
-            if(newDest!=nullptr) unqueueFloor(newDest);
-            destinationFloor = newDest;
-        };
+        }
+        if(*currentFloor == *destinationFloor) {
+            Floor* newDest;
+            do {
+                newDest = (!floorQueue.empty()) ? floorQueue.front() : nullptr;
+                if(newDest!=nullptr) floorQueue.pop_front();
+                destinationFloor = newDest;
+                goingUp = destinationFloor>=currentFloor;
+            } while(newDest==currentFloor);
+        }
         PostMessage(hwnd, ELEVATOR_GRAB, 0, 0);
     });
 }
@@ -157,19 +185,22 @@ void Elevator::awaitInput() {
     killThread();
     wait = true;
     thread = std::thread ([this]() {
-        int timer = 0;
+        ULONGLONG start = GetTickCount64();
         while (wait) {
             Sleep(1); // Wait for a request
-            timer++;
-            if (timer==5000) PostMessage(hwnd, ELEVATOR_MOVE, 0, 0);
+            if (GetTickCount64() - start >= 5000 && currentFloor->getFloorNumber()!=0) {
+                wait = false;
+                queueFloor(&floors[0]);
+            }
+        }
+        if(destinationFloor==nullptr) {
+            Floor* newDest = (!floorQueue.empty()) ? floorQueue.front() : nullptr;
+            if(newDest!=nullptr) floorQueue.pop_front();
+            destinationFloor = newDest;
+            goingUp = destinationFloor>=currentFloor;
         }
         // There is a request
-        Floor* requestedFloor = (!floorQueue.empty()) ? floorQueue.front() : nullptr;
-        if (currentFloor != requestedFloor && requestedFloor != nullptr) {
-            PostMessage(hwnd, ELEVATOR_MOVE, 0, reinterpret_cast<LPARAM>(requestedFloor)); // Move to requested floor
-        } else {
-            //PostMessage(hwnd, ELEVATOR_DROP, 0, 0); // Already at requested floor
-        }
+        PostMessage(hwnd, ELEVATOR_DROP, 0, 0);
     });
 }
 

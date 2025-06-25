@@ -16,7 +16,7 @@ class Button; // Forward declaration
 class Elevator {
 public:
     Elevator(HWND hwnd, int numFloors);
-    ~Elevator() { killThread(); }
+    ~Elevator();
 
     const std::deque<Person>& getPassengers() const { return passengers; }
     const Floor *getCurrentFloor() const { return currentFloor; }

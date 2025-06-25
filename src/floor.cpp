@@ -5,7 +5,7 @@
 void Floor::spawnPerson(Floor *destination) {
     if (*this != *destination) {
         int x_pos = (floorNumber % 2 == 0) ? x + length - (queue.size()+1)*height/4 : x + height/10 + queue.size()*height/4; // X Position based on floor number
-        bool goingUp = (destination->getFloorNumber() > floorNumber); // Determine if the person is going up or down
+        bool goingUp = (destination->getFloorNumber() >= floorNumber); // Determine if the person is going up or down
         queue.emplace_back(hwnd, destination, goingUp, x_pos, y-height/2, height/4, height/2); // Create and add the person to the queue
         RECT invalidate;
         invalidate.left = x;

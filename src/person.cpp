@@ -3,49 +3,49 @@
 #include "person.h"
 #include "floor.h"
 
+#define PERSON_ANIMATION_END (WM_USER+5)
+#define PERSON_LEFT (WM_USER + 6)
+
 void Person::move(short x_offset, short y_offset) {
     int oldX=x, oldY=y;
     x += x_offset; // Move the person in x direction
     y += y_offset; // Move the person in y direction
     RECT invalidate;
-    invalidate.left = min(oldX, x);
+    invalidate.left = min(oldX, x)-3;
     invalidate.top = min(oldY, y);
-    invalidate.right = max(oldX, x);
-    invalidate.bottom = max(oldY, y);
+    invalidate.right = max(oldX, x)+width;
+    invalidate.bottom = max(oldY, y)+height+1;
     InvalidateRect(hwnd, &invalidate, TRUE);
 }
 
-void Person::animate(short x_offset, short y_offset, int duration) {
-    //if(thread.joinable()) thread.join();
+void Person::animateX(short offset, int duration) {
+    killThread();
     // Move the person by the specified offsets over the specified duration
-    /* thread = std::thread([this, x_offset, y_offset, duration]() mutable {
-        int max_offset = (std::abs(x_offset) > std::abs(y_offset)) ? abs(x_offset) : abs(y_offset); // Calculate the total offset
-        int stepDuration = duration / max_offset; // Duration of each step
-        int x_direction = (x_offset > 0) ? 1 : (x_offset < 0) ? -1 : 0; // Determine the direction of movement in x axis
-        int y_direction = (y_offset > 0) ? 1 : (y_offset < 0) ? -1 : 0; // Determine the direction of movement in y axis
-        for (int i = 0; i < max_offset; ++i) {
-            int x_move = (x_offset!=0) ? x_direction : 0;
-            int y_move = (y_offset!=0) ? y_direction : 0;
-            move(x_move, y_move); // Move in x and y directions
-            x_offset -= x_move; // Decrease the offset in x direction
-            y_offset -= y_move; // Decrease the offset in y direction
+    thread = std::thread([this, offset, duration]() {
+        int stepDuration = duration / std::abs(offset); // Duration of each step
+        int direction = (offset > 0) ? 1 : (offset < 0) ? -1 : 0; // Determine the direction of movement
+        for (int i = 0; i < std::abs(offset); ++i) {
+            move(direction, 0); // Move in x and y directions
             Sleep(stepDuration); // Wait for the duration of each step
         }
-    }); */
+        PostMessage(hwnd, PERSON_ANIMATION_END, 0, reinterpret_cast<LPARAM>(this));
+    });
 }
 
-/* void Person::leave() {
-    Person leavingDude = *this; // Create a copy of the person leaving
+void Person::leave() {
     // Move the person to the destination floor and remove them from the queue
-    int movement = (destination->getFloorNumber() % 2==0) ? -destination->getLength() : destination->getLength();
-    leavingDude.animate(movement, 0, 2000); // Animate the person leaving the floor
-    if(thread.joinable()) thread.join();
-    thread = std::thread([this]() {
-        Sleep(2000); // Wait for the animation to finish// Remove the person from the queue
-        auto& leavingVec = destination->getLeaving();
-        leavingVec.erase(std::find(leavingVec.begin(), leavingVec.end(), *this)); // Remove the person from the leaving list of the destination floor
+    int movement = (destination->getFloorNumber() % 2==0) ? 0-x-width : destination->getLength() + destination->getX() - x;
+    killThread();
+    thread = std::thread([this, movement]() {
+        int stepDuration = 2000 / std::abs(movement); // Duration of each step
+        int direction = (movement > 0) ? 1 : (movement < 0) ? -1 : 0; // Determine the direction of movement
+        for (int i = 0; i < std::abs(movement); ++i) {
+            move(direction, 0); // Move in x and y directions
+            Sleep(stepDuration); // Wait for the duration of each step
+        }
+        PostMessage(hwnd, PERSON_LEFT, 0, reinterpret_cast<LPARAM>(this));
     });
-} */
+}
 
 void Person::draw(Graphics& graphics) const {
     // Calculate stickman proportions (the numbners are arbitrary and can be adjusted, i just pikced what looked good)

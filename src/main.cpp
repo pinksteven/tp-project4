@@ -17,7 +17,8 @@ using namespace Gdiplus;
 #define ELEVATOR_GRAB (WM_USER + 3)
 #define ELEVATOR_WAIT (WM_USER + 4)
 
-#define PERSON_ANIMATE (WM_USER+5)
+#define PERSON_ANIMATION_END (WM_USER+5)
+#define PERSON_LEFT (WM_USER + 6)
 
 Elevator elevator(nullptr, 1);
 
@@ -110,18 +111,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
             Floor* destination = std::get<1>(button);
             floor->spawnPerson(destination);
             elevator.queueFloor(floor);
+            elevator.queueFloor(destination);
             elevator.resetWait();
          }
       }
       break;
    }
    case ELEVATOR_MOVE: {
-      const Floor* floor = (lParam!=0) ? reinterpret_cast<Floor*>(lParam) : &elevator.getFloors()[0];
+      const Floor* floor = reinterpret_cast<Floor*>(lParam);
       auto it = std::find_if(elevator.getFloors().begin(), elevator.getFloors().end(),
          [floor](const Floor& f) { return &f == floor; });
       if(it != elevator.getFloors().end()) {
-         int multiplier = std::distance(elevator.getFloors().begin(), it); // How many floors we movin
-         elevator.moveToFloor(floor, multiplier*1000);
+         elevator.moveToFloor(floor, 1000);
       };
       break;
    }
@@ -134,12 +135,26 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
    case ELEVATOR_WAIT:
       elevator.awaitInput();
       break;
-   case PERSON_ANIMATE: {
+   case PERSON_ANIMATION_END: {
       Person* ptr = reinterpret_cast<Person*>(lParam);
-      short x = GET_X_WPARAM(wParam);
-      short y = GET_Y_WPARAM(wParam);
-      int time = (y==0) ? 1000 : x/ptr->getWidth()*500;
-      ptr->animate(x,y, time);
+      ptr->killThread();
+      break;
+   }
+   case PERSON_LEFT: {
+      Person* ptr = reinterpret_cast<Person*>(lParam);
+      ptr->killThread();
+      RECT invalidate;
+      invalidate.left = ptr->getX();
+      invalidate.top = ptr->getY();
+      invalidate.right = ptr->getX() + ptr->getWidth() + 1;
+      invalidate.bottom = ptr->getY() + ptr->getHeight() + 1;
+      std::vector<Person>& leaving = ptr->getDestination()->getLeaving();
+      auto it = std::find_if(leaving.begin(), leaving.end(),
+         [ptr](const Person& p) { return &p == ptr; });
+      if (it != leaving.end()) {
+         leaving.erase(it);
+      }
+      InvalidateRect(hWnd, &invalidate, TRUE);
       break;
    }
    default:

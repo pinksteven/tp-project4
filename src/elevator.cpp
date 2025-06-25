@@ -3,11 +3,15 @@
 #include "person.h"
 #include "button.h"
 
-#include <thread>
 #include <string>
+#include <thread>
 #include <cmath>
 #include <algorithm>
 
+#define ELEVATOR_MOVE (WM_USER+1)
+#define ELEVATOR_DROP (WM_USER + 2)
+#define ELEVATOR_GRAB (WM_USER + 3)
+#define ELEVATOR_WAIT (WM_USER + 4)
 
 Elevator::Elevator(HWND hwnd, int numFloors)
         : hwnd(hwnd), destinationFloor(nullptr), goingUp(true) {
@@ -22,7 +26,7 @@ Elevator::Elevator(HWND hwnd, int numFloors)
             int floorY = clientHeight - i * floorHeight - 3; // Calculate the y position of the floor
             int floorX = (i % 2 == 0) ? 0 : (clientWidth + floorHeight * 2)/2; // X position based on floor number
             // Create a new floor and add it to the vector
-            floors.push_back(Floor(hwnd, i, floorX, floorY, (clientWidth-floorHeight*2)/2, floorHeight));
+            floors.emplace_back(hwnd, i, floorX, floorY, (clientWidth-floorHeight*2)/2, floorHeight);
         }
         currentFloor = &floors[0]; // Set the current floor to the first floor
         x = (clientWidth - floorHeight*2)/2; // Center the elevator horizontally
@@ -35,41 +39,48 @@ Elevator::Elevator(HWND hwnd, int numFloors)
                 int btnX = (i % 2 == 0) ? 1 : clientWidth-btnSize-1; // X position based on floor number
                 int btnY = floors[i].getY() - (j+1) * (btnSize+2) - btnSize/2; // Y position based on floor number
                 // Create a button for each floor
-                Button button(btnX, btnY, btnSize, btnSize, std::to_wstring(j+1), &floors[i], &floors[j], this); // Button for each floor
-                if(i!=j) floors[i].addButton(button); // Add the button to the floor
+                Button button(btnX, btnY, btnSize, btnSize, std::to_wstring(j+1), &floors[i], &floors[j]); // Button for each floor
+                if(i!=j) addButton(button); // Add the button to the floor
             }
         }
-        awaitInput(); // Start waiting for user input
+        awaitInput();
     }
 }
+
 
 void Elevator::move(int offset) {
         y+=offset; // Move the elevator up
         for(auto& passenger : passengers) 
             passenger.move(0, offset); // Move each passenger in the elevator
-        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW); // Update the entire window
+        RECT invalidate;
+        invalidate.left = x;
+        invalidate.top = floors.back().getY() - floors.back().getHeight();
+        invalidate.right = x + width+1;
+        invalidate.bottom = floors[0].getY()+1;
+        InvalidateRect(hwnd, &invalidate, TRUE); // Update the entire window
     }
 
-void Elevator::moveToFloor(Floor *destination, int duration) {
+void Elevator::moveToFloor(const Floor *destination, int duration) {
     if (*currentFloor != *destination) {
         int offset = destination->getY() - currentFloor->getY(); // Calculate the offset to move to the destination floor
         // Move the elevator up or down by the specified offset over the specified duration
-        std::thread t([this, destination, offset, duration]() {
+        killThread();
+        thread = std::thread ([this, destination, offset, duration]() {
             int stepDuration = duration / std::abs(offset); // Duration proportional to the distance
             int direction = (offset > 0) ? 1 : -1; // Determine the direction of movement
             for (int i = 0; i < std::abs(offset); ++i) {
                 move(direction);
-                Sleep(stepDuration); // Wait for the duration of each step (1 ms per step)
+                Sleep(stepDuration); // Wait for the duration of each step
             }
-                currentFloor = destination; // Update the current floor after moving
-                dropPassengers(); // Drop passengers at the current floor completing the movement loop
+                currentFloor = const_cast<Floor*>(destination); // Update the current floor after moving
+                //PostMessage(hwnd, ELEVATOR_DROP, 0, 0); // Drop passengers at the current floor completing the movement loop
         });
-        t.detach(); // Detach the thread to allow it to run independently
     }
 }
 
 void Elevator::grabPassengers() {
-    std::thread([this]() {
+    killThread();
+    thread = std::thread([this]() {
         auto& queue = currentFloor->getQueue();
         /* for (auto it = queue.begin(); it != queue.end(); ) {
             if ((*it).isGoingUp()==goingUp && destinationFloor != nullptr && (passengers.size()+1)*70 <= 600) {
@@ -103,20 +114,21 @@ void Elevator::grabPassengers() {
         } */
         if(destinationFloor != nullptr){
             int current = currentFloor->getFloorNumber();
-            if (goingUp && current + 1 < floors.size()) {
-                moveToFloor(&floors[current + 1], 1000);
-            } else if(current - 1 >= 0) {
-                moveToFloor(&floors[current - 1], 1000);
-            }
-        } else {
-            awaitInput(); // Wait for user input if no destination floor is set
+            Floor* nextFloor = (goingUp) ? &floors[current+1] : &floors[current-1];
+            PostMessage(hwnd, ELEVATOR_MOVE, 0, reinterpret_cast<LPARAM>(nextFloor));
+        } else if(!passengers.empty()){
+
         }
-    }).detach();
+        else {
+            PostMessage(hwnd, ELEVATOR_WAIT, 0, 0); // Wait for user input if no destination floor is set
+        }
+    });
 }
 
 void Elevator::dropPassengers(){
+    killThread();
     // Drop passengers at the current floor
-    std::thread([this]() {
+    thread = std::thread ([this]() {
         /* for (auto it = passengers.begin(); it != passengers.end(); ) {
             if (*it->getDestination() == *currentFloor) {
                 Person leavingPerson = *it;
@@ -133,28 +145,37 @@ void Elevator::dropPassengers(){
             }
         } */
         if(*currentFloor == *destinationFloor || destinationFloor == nullptr) {
-            destinationFloor = floorQueue.empty() ? nullptr : floorQueue.front(); // Set the next destination floor if available
-            //floorQueue.pop_front(); // Remove the current destination floor from the queue
-            goingUp = (destinationFloor && destinationFloor->getFloorNumber() > currentFloor->getFloorNumber()); // Determine if the elevator is going up or down
+            Floor* newDest = (!floorQueue.empty()) ? floorQueue.front() : nullptr;
+            if(newDest!=nullptr) unqueueFloor(newDest);
+            destinationFloor = newDest;
         };
-        grabPassengers();
-    }).detach();
+        PostMessage(hwnd, ELEVATOR_GRAB, 0, 0);
+    });
 }
 
 void Elevator::awaitInput() {
-    // Wait for user input to move the elevator
-    std::thread([this]() {
+    killThread();
+    wait = true;
+    thread = std::thread ([this]() {
         int timer = 0;
-        while (floorQueue.empty()) {
-            if(currentFloor->getFloorNumber()!=0) timer++; // Increment the timer if the elevator is not on the ground floor
-            /* if (timer >= 5000) { // If the timer exceeds 5 seconds
-                moveToFloor(&building->getFloors()[0], currentFloor->getFloorNumber() * 1000); // Move to the ground floor
-                Sleep(currentFloor->getFloorNumber() * 1000);
-            } */
-            Sleep(1); // Sleep for 1 ms to avoid busy waiting
+        while (wait) {
+            Sleep(1); // Wait for a request
+            timer++;
+            if (timer==5000) PostMessage(hwnd, ELEVATOR_MOVE, 0, 0);
         }
-        dropPassengers(); //This 
-    }).detach();
+        // There is a request
+        Floor* requestedFloor = (!floorQueue.empty()) ? floorQueue.front() : nullptr;
+        if (currentFloor != requestedFloor && requestedFloor != nullptr) {
+            PostMessage(hwnd, ELEVATOR_MOVE, 0, reinterpret_cast<LPARAM>(requestedFloor)); // Move to requested floor
+        } else {
+            //PostMessage(hwnd, ELEVATOR_DROP, 0, 0); // Already at requested floor
+        }
+    });
+}
+
+void Elevator::killThread() {
+    wait=false;
+    if(thread.joinable()) thread.join();
 }
 
 void Elevator::draw() const {
@@ -164,12 +185,18 @@ void Elevator::draw() const {
     PAINTSTRUCT  ps;
     hdc = BeginPaint(hwnd, &ps);
     Graphics graphics(hdc);
+
+    // Set the clip region to the invalidated rectangle
+    Rect clipRect(ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right - ps.rcPaint.left, ps.rcPaint.bottom - ps.rcPaint.top);
+    graphics.SetClip(clipRect);
+
     Pen pen(Color(255, 255, 0, 0)); // Red color for the elevator
     graphics.DrawRectangle(&pen, Rect(x, y, width, height));
-    for (const auto& passenger : passengers) {
+    for (const auto& passenger : passengers)
         passenger.draw(graphics); // Draw each passenger in the elevator
-    }
-    for (auto& floor : floors) 
+    for (const auto& floor : floors) 
         floor.draw(graphics); // Draw each floor and people on it
+    for (const auto& button : buttons) 
+        button.draw(graphics); // Draw each button on the floor
     EndPaint(hwnd, &ps);
 }

@@ -3,29 +3,35 @@
 #include "person.h"
 #include "floor.h"
 
-void Person::move(int x_offset, int y_offset) {
+void Person::move(short x_offset, short y_offset) {
+    int oldX=x, oldY=y;
     x += x_offset; // Move the person in x direction
     y += y_offset; // Move the person in y direction
-    RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW); // Update the entire window
+    RECT invalidate;
+    invalidate.left = min(oldX, x);
+    invalidate.top = min(oldY, y);
+    invalidate.right = max(oldX, x);
+    invalidate.bottom = max(oldY, y);
+    InvalidateRect(hwnd, &invalidate, TRUE);
 }
 
-void Person::animate(int x_offset, int y_offset, int duration) {
+void Person::animate(short x_offset, short y_offset, int duration) {
+    //if(thread.joinable()) thread.join();
     // Move the person by the specified offsets over the specified duration
-    std::thread t([this, x_offset, y_offset, duration]() mutable {
+    /* thread = std::thread([this, x_offset, y_offset, duration]() mutable {
         int max_offset = (std::abs(x_offset) > std::abs(y_offset)) ? abs(x_offset) : abs(y_offset); // Calculate the total offset
         int stepDuration = duration / max_offset; // Duration of each step
         int x_direction = (x_offset > 0) ? 1 : (x_offset < 0) ? -1 : 0; // Determine the direction of movement in x axis
         int y_direction = (y_offset > 0) ? 1 : (y_offset < 0) ? -1 : 0; // Determine the direction of movement in y axis
         for (int i = 0; i < max_offset; ++i) {
-            if (x_offset != 0 || y_offset != 0) {
-                move(x_direction, y_direction); // Move in x and y directions
-                x_offset -= x_direction; // Decrease the offset in x direction
-                y_offset -= y_direction; // Decrease the offset in y direction
-            }
+            int x_move = (x_offset!=0) ? x_direction : 0;
+            int y_move = (y_offset!=0) ? y_direction : 0;
+            move(x_move, y_move); // Move in x and y directions
+            x_offset -= x_move; // Decrease the offset in x direction
+            y_offset -= y_move; // Decrease the offset in y direction
             Sleep(stepDuration); // Wait for the duration of each step
         }
-    });
-    t.detach(); // Detach the thread to allow it to run independently
+    }); */
 }
 
 /* void Person::leave() {
@@ -33,11 +39,11 @@ void Person::animate(int x_offset, int y_offset, int duration) {
     // Move the person to the destination floor and remove them from the queue
     int movement = (destination->getFloorNumber() % 2==0) ? -destination->getLength() : destination->getLength();
     leavingDude.animate(movement, 0, 2000); // Animate the person leaving the floor
-    std::thread t([this]() {
+    if(thread.joinable()) thread.join();
+    thread = std::thread([this]() {
         Sleep(2000); // Wait for the animation to finish// Remove the person from the queue
         auto& leavingVec = destination->getLeaving();
         leavingVec.erase(std::find(leavingVec.begin(), leavingVec.end(), *this)); // Remove the person from the leaving list of the destination floor
-        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW); // Update the entire window
     });
 } */
 

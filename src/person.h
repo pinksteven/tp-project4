@@ -1,4 +1,5 @@
 #pragma once
+#include <thread>
 #include <windows.h>
 #include <objidl.h>
 #include <gdiplus.h>
@@ -10,6 +11,7 @@ class Person {
 public:
     Person(HWND hwnd, Floor *destination, bool goingUp, int x, int y, int width, int height)
         : hwnd(hwnd),  destination(destination), goingUp(goingUp), x(x), y(y), width(width), height(height) {}
+    // ~Person() { if(thread.joinable()) thread.join(); }
 
     bool operator==(const Person& other) const { return &other != nullptr && this==&other; } // Compare based on pointer address
     bool operator!=(const Person& other) const { return &other == nullptr || this!=&other; } //
@@ -19,8 +21,8 @@ public:
     int getWidth() const { return width; }
     bool isGoingUp() const { return goingUp; }
 
-    void move(int x_offset, int y_offset);
-    void animate(int x_offset, int y_offset, int duration);
+    void move(short x_offset, short y_offset);
+    void animate(short x_offset, short y_offset, int duration);
     // void leave();
     void draw(Graphics& graphics) const;
 private:

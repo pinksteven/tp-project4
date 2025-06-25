@@ -9,7 +9,17 @@ using namespace Gdiplus;
 #include "floor.h"
 #include "button.h"
 
-Elevator elevator(NULL, 1);
+#define GET_X_WPARAM(wp) ( static_cast<short>( (wp) & 0xFFFF ) )
+#define GET_Y_WPARAM(wp) ( static_cast<short>( ((wp) >> 16) & 0xFFFF ) )
+
+#define ELEVATOR_MOVE (WM_USER+1)
+#define ELEVATOR_DROP (WM_USER + 2)
+#define ELEVATOR_GRAB (WM_USER + 3)
+#define ELEVATOR_WAIT (WM_USER + 4)
+
+#define PERSON_ANIMATE (WM_USER+5)
+
+Elevator elevator(nullptr, 1);
 
 VOID OnPaint(HWND hWnd)
 {
@@ -55,7 +65,8 @@ INT WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, PSTR, INT iCmdShow)
       hInstance,                // program instance handle
       NULL);                    // creation parameters
 
-   elevator = Elevator(hWnd, 5); // Create a building with 5 floors
+   // Reinitialize the object
+   new (&elevator) Elevator(hWnd, 5);
       
    ShowWindow(hWnd, iCmdShow);
    UpdateWindow(hWnd);
@@ -91,15 +102,46 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message,
    case WM_LBUTTONUP: {
       int x = GET_X_LPARAM(lParam);
       int y = GET_Y_LPARAM(lParam);
-      for (auto& floor : elevator.getFloors()) {
-         for (auto& btn : floor.getButtons()) {
-            // Ensure handleMouse exists in Button class
-            btn.handleMouse(message, x, y);
+      for (auto& btn : elevator.getButtons()) {
+         // Ensure handleMouse exists in Button class
+         std::tuple<Floor*, Floor*> button = btn.handleMouse(message, x, y);
+         if(std::get<0>(button) != std::get<1>(button)){
+            Floor* floor = std::get<0>(button);
+            Floor* destination = std::get<1>(button);
+            floor->spawnPerson(destination);
+            elevator.queueFloor(floor);
+            elevator.resetWait();
          }
       }
-      InvalidateRect(hWnd, NULL, FALSE); // Redraw if needed
-    break;
-}
+      break;
+   }
+   case ELEVATOR_MOVE: {
+      const Floor* floor = (lParam!=0) ? reinterpret_cast<Floor*>(lParam) : &elevator.getFloors()[0];
+      auto it = std::find_if(elevator.getFloors().begin(), elevator.getFloors().end(),
+         [floor](const Floor& f) { return &f == floor; });
+      if(it != elevator.getFloors().end()) {
+         int multiplier = std::distance(elevator.getFloors().begin(), it); // How many floors we movin
+         elevator.moveToFloor(floor, multiplier*1000);
+      };
+      break;
+   }
+   case ELEVATOR_DROP:
+      elevator.dropPassengers();
+      break;
+   case ELEVATOR_GRAB:
+      elevator.grabPassengers();
+      break;
+   case ELEVATOR_WAIT:
+      elevator.awaitInput();
+      break;
+   case PERSON_ANIMATE: {
+      Person* ptr = reinterpret_cast<Person*>(lParam);
+      short x = GET_X_WPARAM(wParam);
+      short y = GET_Y_WPARAM(wParam);
+      int time = (y==0) ? 1000 : x/ptr->getWidth()*500;
+      ptr->animate(x,y, time);
+      break;
+   }
    default:
       return DefWindowProc(hWnd, message, wParam, lParam);
    }

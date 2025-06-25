@@ -20,14 +20,17 @@ void Button::draw(Graphics& graphics) const {
     graphics.DrawString(label.c_str(), -1, &font, layoutRect, &format, &textBrush);
 }
 
-void Button::handleMouse(UINT msg, int mx, int my) {
+std::tuple<Floor*, Floor*> Button::handleMouse(UINT msg, int mx, int my) {
     bool inside = (mx >= x && mx <= x + width && my >= y && my <= y + height);
     if (msg == WM_MOUSEMOVE) {
         hovered = inside;
+        return std::make_tuple(floor, floor);
     } else if (msg == WM_LBUTTONDOWN) {
         pressed = inside;
+        return std::make_tuple(floor, floor);
     } else if (msg == WM_LBUTTONUP) {
-        if (pressed && inside) {floor->spawnPerson(destination); elevator->queueFloor(destination);}; // Call the onClick function if pressed and inside
+        if (pressed && inside) {pressed = false; return std::make_tuple(floor, destination);};
         pressed = false;
+        return std::make_tuple(floor, floor);
     }
 }

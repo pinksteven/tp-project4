@@ -4,11 +4,15 @@
 
 void Floor::spawnPerson(Floor *destination) {
     if (*this != *destination) {
-        int x_pos = (floorNumber % 2 == 0) ? x + length - (queue.size()+1)*height/4 : x - queue.size()*height/4; // X Position based on floor number
+        int x_pos = (floorNumber % 2 == 0) ? x + length - (queue.size()+1)*height/4 : x + height/10 + queue.size()*height/4; // X Position based on floor number
         bool goingUp = (destination->getFloorNumber() > floorNumber); // Determine if the person is going up or down
-        Person person(hwnd, destination, goingUp, x_pos, y-height/2, height/4, height/2); // Create a new person
-        queue.push_back(person); // Add the person to the queue
-        RedrawWindow(hwnd, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW); // Update the entire window
+        queue.emplace_back(hwnd, destination, goingUp, x_pos, y-height/2, height/4, height/2); // Create and add the person to the queue
+        RECT invalidate;
+        invalidate.left = x;
+        invalidate.top = y-height;
+        invalidate.right = x + length;
+        invalidate.bottom = y;
+        InvalidateRect(hwnd, &invalidate, TRUE); // Update the entire window
     }
 }
 
@@ -20,8 +24,5 @@ void Floor::draw(Graphics& graphics) const {
     }
     for (const auto& person : leaving) {
         person.draw(graphics); // Draw each person leaving the floor
-    }
-    for (const auto& button : buttons) {
-        button.draw(graphics); // Draw each button on the floor
     }
 }

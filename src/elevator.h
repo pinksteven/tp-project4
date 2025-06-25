@@ -45,6 +45,12 @@ public:
     void resetWait() { wait = false; }
     void killThread();
 
+    int getTotalWeight() const {
+        int total = 0;
+        for (const auto& p : passengers) total += 70;
+        return total;
+    }
+
     void startDraw();
 
     void draw() const;

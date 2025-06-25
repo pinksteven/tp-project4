@@ -34,14 +34,12 @@ void Person::animateX(short offset, int duration) {
 
 void Person::leave() {
     // Move the person to the destination floor and remove them from the queue
-    int movement = (destination->getFloorNumber() % 2==0) ? 0-x-width : destination->getLength() + destination->getX() - x;
     killThread();
-    thread = std::thread([this, movement]() {
-        int stepDuration = 2000 / std::abs(movement); // Duration of each step
-        int direction = (movement > 0) ? 1 : (movement < 0) ? -1 : 0; // Determine the direction of movement
-        for (int i = 0; i < std::abs(movement); ++i) {
+    thread = std::thread([this]() {
+        int direction = (destination->getFloorNumber()%2==0) ? -4 : 4; // Determine the direction of movement
+        for (int i = 0; i < 60; ++i) {
             move(direction, 0); // Move in x and y directions
-            Sleep(stepDuration); // Wait for the duration of each step
+            Sleep(10); // Wait for the duration of each step
         }
         PostMessage(hwnd, PERSON_LEFT, 0, reinterpret_cast<LPARAM>(this));
     });

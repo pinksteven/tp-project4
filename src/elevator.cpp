@@ -93,10 +93,11 @@ void Elevator::grabPassengers() {
     thread = std::thread([this]() {
         auto& queue = currentFloor->getQueue();
         for (auto it = queue.begin(); it != queue.end(); ) {
-            if (destinationFloor != nullptr && (passengers.size() + 1)*70 <= 600 && it->isGoingUp()==goingUp) {
+            if (destinationFloor != nullptr && (passengers.size() + 1)*70 < 600 && it->isGoingUp()==goingUp) {
                 int index = std::distance(queue.begin(), it);
                 auto remove = std::find(floorQueue.begin(), floorQueue.end(), currentFloor);
-                if(remove != floorQueue.end()) floorQueue.erase(remove); // Remove the current floor from the queue
+                //Why 2? i don't know. I thought it should be 1 but 2 works and 1 doesn't
+                if(remove != floorQueue.end() && currentFloor->getQueue().size()!=2) floorQueue.erase(remove); // Remove the current floor from the queue
                 if((goingUp && it->getDestination()->getFloorNumber()<destinationFloor->getFloorNumber()) || 
                     (!goingUp && it->getDestination()->getFloorNumber()>destinationFloor->getFloorNumber())) {
                         auto remove = std::find(floorQueue.begin(), floorQueue.end(), it->getDestination());
@@ -127,17 +128,14 @@ void Elevator::grabPassengers() {
                 for(auto j = index; j < queue.size(); ++j) {
                     queue[j].animateX(movement, 100); // Move each passenger in the elevator
                 }
-                Sleep(100); // Wait for a short duration to have spacing between leaving passengers
+                Sleep(300); // Wait for a short duration to have spacing between leaving passengers
             } else { ++it; }
         }
         if(destinationFloor != nullptr){
             int current = currentFloor->getFloorNumber();
             Floor* nextFloor = (goingUp) ? &floors[current+1] : &floors[current-1];
             PostMessage(hwnd, ELEVATOR_MOVE, 0, reinterpret_cast<LPARAM>(nextFloor));
-        } else if(!passengers.empty()){
-
-        }
-        else {
+        } else {
             PostMessage(hwnd, ELEVATOR_WAIT, 0, 0); // Wait for user input if no destination floor is set
         }
     });
@@ -162,7 +160,7 @@ void Elevator::dropPassengers(){
                         Sleep(100);
                         pos += p.getWidth();
                     }
-                    Sleep(100); // Wait for a short duration to have spacing between leaving passengers
+                    Sleep(300); // Wait for a short duration to have spacing between leaving passengers
                 } else {
                     ++it; // Move to the next passenger if not leaving
                 }
@@ -217,6 +215,21 @@ void Elevator::draw() const {
     hdc = BeginPaint(hwnd, &ps);
     Graphics graphics(hdc);
 
+    std::wstring weightLabel = L"Total weight: " + std::to_wstring(getTotalWeight()) + L" kg";
+    FontFamily fontFamily(L"Arial");
+    Font font(&fontFamily, 16, FontStyleRegular, UnitPixel);
+    SolidBrush brush(Color(255, 0, 0, 0)); // Black color
+    PointF origin(0, 0);
+    RectF weightRect;
+    graphics.MeasureString(weightLabel.c_str(), -1, &font, origin, &weightRect);
+    RECT weightRectInt;
+    weightRectInt.left   = static_cast<LONG>(weightRect.X);
+    weightRectInt.top    = static_cast<LONG>(weightRect.Y);
+    weightRectInt.right  = static_cast<LONG>(weightRect.X + weightRect.Width);
+    weightRectInt.bottom = static_cast<LONG>(weightRect.Y + weightRect.Height);
+    InvalidateRect(hwnd, &weightRectInt, TRUE);
+    graphics.DrawString(weightLabel.c_str(), -1, &font, origin, &brush);
+
     // Set the clip region to the invalidated rectangle
     Rect clipRect(ps.rcPaint.left, ps.rcPaint.top, ps.rcPaint.right - ps.rcPaint.left, ps.rcPaint.bottom - ps.rcPaint.top);
     graphics.SetClip(clipRect);
@@ -229,5 +242,6 @@ void Elevator::draw() const {
         floor.draw(graphics); // Draw each floor and people on it
     for (const auto& button : buttons) 
         button.draw(graphics); // Draw each button on the floor
+
     EndPaint(hwnd, &ps);
 }
